@@ -1,22 +1,21 @@
 ﻿using CordilleraMVC.Models;
-using System;
+using PagedList;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Web.Mvc;
 
 namespace CordilleraMVC.Services
 {
     public interface IEmpleadoService
     {
-        IEnumerable<Empleado> ListaEmpleados();
-        List<Empleado> ListarEmpleadosPag(string filtroActual, string nombreBusqueda, int? pagina);
+        List<Empleado> ListaEmpleados();
+        IPagedList ListarEmpleadosPag(string filtroActual, string nombreBusqueda, int? pagina, List<Empleado> listaEmpleados);
         Empleado BuscarPorId(int id);
         List<Empleado> BuscarPorNombre(string nombre);
-        bool GuardarEmpleado(Empleado empleado);
+        bool GuardarEmpleado(Empleado empleado, ModelStateDictionary modelState);
         void BorrarEmpleado(int id);
-        bool ActualizarEmpleado();
+        bool ActualizarEmpleado(ModelStateDictionary modelState);
         List<Empleado> PorOrden(string ordenSort);
         void Guardar();
+        string AsignacionString(string filtroActual, string nombreBusqueda);
     }
 }

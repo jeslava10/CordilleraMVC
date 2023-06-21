@@ -1,31 +1,39 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Data.Entity;
-using System.Linq;
-using System.Net;
-using System.Web;
-using System.Web.Mvc;
-using CordilleraMVC.Data;
+﻿using CordilleraMVC.Data;
 using CordilleraMVC.Models;
 using CordilleraMVC.Services;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Net;
+using System.Web.Mvc;
 
 namespace CordilleraMVC.Controllers
 {
     public class EmpleadoController : Controller
     {
-        private IEmpleadoService _empleadoService;
-        private CordilleraContext db = new CordilleraContext();
+        private IEmpleadoService empleadoService;
+        private ModelStateDictionary modelState;
+        //private CordilleraContext db = new CordilleraContext();
 
         public EmpleadoController(IEmpleadoService empleadoService)
         {
-            _empleadoService = empleadoService;
+            this.empleadoService = empleadoService;
         }
 
         // GET: Empleado
-        public ActionResult Index()
+        public ActionResult Index(string sortOrder, string currentFilter, string searchString, int? page)
         {
-            return View(_empleadoService.ListaEmpleados().ToList());
+            ViewBag.CurrentFilter = sortOrder;
+            ViewBag.NombreSortParm = String.IsNullOrEmpty(sortOrder) ? "nombre_desc" : "";
+            ViewBag.CargoSortParm = String.IsNullOrEmpty(sortOrder) ? "cargo_desc" : "Cargo";
+            
+            List<Empleado> empleados;
+            
+            ViewBag.CurrentFilter = empleadoService.AsignacionString(currentFilter, searchString);
+            empleados = empleadoService.BuscarPorNombre(searchString);
+            empleados = empleadoService.PorOrden(sortOrder);
+            var empleadoPaged = empleadoService.ListarEmpleadosPag(currentFilter, searchString, page, empleados);
+            return View(empleadoPaged);
         }
 
         // GET: Empleado/Details/5
@@ -35,7 +43,7 @@ namespace CordilleraMVC.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Empleado empleado = db.Empleados.Find(id);
+            Empleado empleado = empleadoService.BuscarPorId(id.Value);
             if (empleado == null)
             {
                 return HttpNotFound();
@@ -54,12 +62,12 @@ namespace CordilleraMVC.Controllers
         // más detalles, vea https://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Create([Bind(Include = "EmpleadoId,Nombre,Apellido,Telefono,Email,Cargo")] Empleado empleado)
+        public ActionResult Create([Bind(Include = "Nombre,Apellido,Telefono,Email,Cargo")] Empleado empleado)
         {
-            if (ModelState.IsValid)
+            modelState = new ModelStateDictionary();
+            bool validaGuardar = empleadoService.GuardarEmpleado(empleado, modelState);
+            if (validaGuardar)
             {
-                db.Empleados.Add(empleado);
-                db.SaveChanges();
                 return RedirectToAction("Index");
             }
 
@@ -73,7 +81,7 @@ namespace CordilleraMVC.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Empleado empleado = db.Empleados.Find(id);
+            Empleado empleado = empleadoService.BuscarPorId(id.Value);
             if (empleado == null)
             {
                 return HttpNotFound();
@@ -84,27 +92,38 @@ namespace CordilleraMVC.Controllers
         // POST: Empleado/Edit/5
         // Para protegerse de ataques de publicación excesiva, habilite las propiedades específicas a las que quiere enlazarse. Para obtener 
         // más detalles, vea https://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
+        [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public ActionResult Edit([Bind(Include = "EmpleadoId,Nombre,Apellido,Telefono,Email,Cargo")] Empleado empleado)
-        {
-            if (ModelState.IsValid)
-            {
-                db.Entry(empleado).State = EntityState.Modified;
-                db.SaveChanges();
-                return RedirectToAction("Index");
-            }
-            return View(empleado);
-        }
-
-        // GET: Empleado/Delete/5
-        public ActionResult Delete(int? id)
+        public ActionResult EditPost(int? id)
         {
             if (id == null)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Empleado empleado = db.Empleados.Find(id);
+            Empleado empleado = empleadoService.BuscarPorId(id.Value);
+            string[] datosEmpleado = new string[] { "Nombre", "Apellido", "Telefono", "Email", "Cargo" };
+            if(TryUpdateModel(empleado, "", datosEmpleado))
+            {
+                if (empleadoService.ActualizarEmpleado(modelState))
+                {
+                    return RedirectToAction("Index");
+                }
+            }
+            return View(empleado);
+        }
+
+        // GET: Empleado/Delete/5
+        public ActionResult Delete(int? id, bool? saveChangesError=false)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            if (saveChangesError.GetValueOrDefault())
+            {
+                ViewBag.ErrorMessage = "Borrado fallido, Intente nuevamente, y si el error persiste contacte al administrador.";
+            }
+            Empleado empleado = empleadoService.BuscarPorId(id.Value);
             if (empleado == null)
             {
                 return HttpNotFound();
@@ -117,19 +136,16 @@ namespace CordilleraMVC.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult DeleteConfirmed(int id)
         {
-            Empleado empleado = db.Empleados.Find(id);
-            db.Empleados.Remove(empleado);
-            db.SaveChanges();
-            return RedirectToAction("Index");
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
+            try
             {
-                db.Dispose();
+                Empleado empleado = empleadoService.BuscarPorId(id);
+                empleadoService.BorrarEmpleado(id);
             }
-            base.Dispose(disposing);
+            catch (DataException)
+            {
+                return RedirectToAction("Delete", new { id = id, saveChangesError = true });
+            }
+            return RedirectToAction("Index");
         }
     }
 }
